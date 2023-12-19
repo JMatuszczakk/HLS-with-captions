@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubflix</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <h1>HLS Stream with VTT Subtitles</h1>
+
+    <label for="videoUrl">Video URL:</label>
+    <input type="text" id="videoUrl" placeholder="Enter video URL">
+
+    <label for="subtitleUrl">Subtitle URL:</label>
+    <input type="text" id="subtitleUrl" placeholder="Enter subtitle URL">
+
+    <button onclick="loadVideo()">OK</button>
+
+    <video id="videoPlayer" controls></video>
+
+    <script>
+        const video = document.getElementById('videoPlayer');
+        const videoUrlInput = document.getElementById('videoUrl');
+        const subtitleUrlInput = document.getElementById('subtitleUrl');
+        const hls = new Hls();
+
+        function loadVideo() {
+            const videoUrl = videoUrlInput.value.trim();
+            const subtitleUrl = subtitleUrlInput.value.trim();
+
+            if (!videoUrl || !subtitleUrl) {
+                alert('Please enter both video and subtitle URLs.');
+                return;
+            }
+
+            if (Hls.isSupported()) {
+                hls.loadSource(videoUrl);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    const textTrack = video.addTextTrack("subtitles", "English", "en");
+                    textTrack.mode = "showing";
+
+                    fetch(subtitleUrl)
+                        .then(response => response.text())
+                        .then(data => {
+                            const cues = [];
+                            const lines = data.trim().split('\n');
+
+                            for (let i = 0; i < lines.length; i++) {
+                                if (lines[i].includes('-->')) {
+                                    const [start, end] = lines[i].split(' --> ');
+                                    const startTime = parseTime(start);
+                                    const endTime = parseTime(end);
+
+                                    const captionText = lines[i + 1];
+                                    if (captionText) {
+                                        const cue = new VTTCue(startTime, endTime, captionText);
+                                        cues.push(cue);
+                                    }
+                                }
+                            }
+
+                            cues.forEach(cue => textTrack.addCue(cue));
+                        })
+                        .catch(error => console.error('Error loading captions:', error));
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = videoUrl;
+            }
+        }
+
+        function parseTime(timeStr) {
+            const parts = timeStr.split(':');
+            const seconds = parseFloat(parts[2]);
+            const minutes = parseFloat(parts[1]);
+            const hours = parseFloat(parts[0]);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+    </script>
+</body>
+</html>
